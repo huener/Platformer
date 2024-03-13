@@ -1,0 +1,864 @@
+<!--	Gael Brice	      			         Assignment VII : JavaScript Luigi Time			        	  CSCE 3193
+ //	    12-04-2022				        		           Game.html					                  Dr. Streeter
+ //
+ // 	This simple webpage holds a JavaScript implementation of the simplistic Mario-style sidescroller developed in
+ //     previous assignments.
+-->
+
+<!DOCTYPE HTML>
+<head>
+    <title>Luigi Time</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <canvas id="myCanvas" width="1000" height="500" style="border:2px solid #f02c2c;"></canvas>
+
+
+
+
+<script type="text/javascript">
+
+    //
+    // Sprite Classes
+    class Sprite
+    {
+        constructor(x, y)
+        {
+            this.x = x
+            this.y = y
+            this.prev_x = this.x
+            this.prev_y = this.y
+        }
+
+        correction(p)
+        {
+            // x collision from left
+            if ((this.x + this.w >= p.x) && (this.prev_x + this.w <= p.x))
+            {
+                View.scroll = View.prev_scroll;
+                this.x = p.x - this.w;
+            }
+
+            // x collision from right
+            else if((this.x <= p.x + p.w) && (this.prev_x >= p.x + p.w))
+            {
+                View.scroll = View.prev_scroll;
+                this.x = p.x + p.w;
+            }
+
+            // y collision from above
+            else if ((this.y + this.h >= p.y) && (this.prev_y + this.h <= p.y))
+            {    // this statement can be reversed if bottom pipe collision is a necessity at some point.
+                this.y = p.y - this.h;
+            }
+        }
+
+        abovePipe(p)
+        {
+            if (this.prev_y + this.h >= p.y)
+                return false;
+            if ((this.x + this.w >= p.x) && (this.x + (2 * this.w) <= p.x + p.w))
+                return true;
+            return false;
+        }
+
+        isPipe()
+        {
+            return false;
+        }
+
+        isEnemy()
+        {
+            return false;
+        }
+
+        isPlayer()
+        {
+            return false;
+        }
+
+        isProjectile()
+        {
+            return false;
+        }
+    }
+
+    class Pipe extends Sprite
+    {
+        // global variables which hold pipe position in model.
+        currentFrame;
+
+        constructor(x, y)
+        {
+            super(x, y);
+
+            this.currentFrame = new Image();
+            this.currentFrame.src = "pipe.png";
+            
+            this.w = 55;
+            this.h = 400 - this.y;
+        }
+
+
+        // Sprite methods
+        update(q){ }        // pipes are static
+        correction(p){  }   // pipes are static
+        
+        isPipe()
+        {
+            return true;
+        }
+
+        toString()
+        {
+            return "Pipe (x,y) = (" + this.x + ", " + this.y + "), width = " + this.w + ", height = " + this.h +")";
+        }
+
+    }
+
+
+    class Mario extends Sprite
+    {
+        jump_count;
+        
+        animation;
+        currentFrame;
+
+        // physics and frame animation variables
+        vert_velocity;
+        direction;
+        canJump;
+        iterator;
+
+        constructor(x, y)
+        {
+            super(x, y);
+            this.jump_count = 0;
+            this.animation = [];
+
+            for (var i = 0; i < 8; i++)
+            { 
+                var image = new Image();
+
+                image.src = "R" + i + ".png";
+                this.animation.push(image);
+            }
+
+            this.iterator = 0;
+            this.direction = false;
+            this.canJump = false;
+            this.vert_velocity = 0;
+            this.currentFrame = new Image();
+            this.currentFrame = this.animation[0];
+
+            this.w = 35;
+            this.h = 68;
+        }
+
+        // alters which sprite to show based on a pattern and the passed in motion of luigi
+        // true = right facing      false = left facing
+        changeFrame(direction)
+        {
+            this.direction = direction;       // used by view to display sprite facing in the correct direction
+
+            if (this.iterator >= 7)
+            {
+                this.iterator = 0;  
+            }
+            else
+            {
+                this.iterator += 1;
+            }
+            
+            this.currentFrame = this.animation[this.iterator];
+
+            this.w = 35
+            try{
+                this.h = this.currentFrame.naturalHeight;
+            }
+            catch(error){}
+            
+        }
+        
+        idle()
+        {
+            this.currentFrame = this.animation[0];
+        }
+
+        //
+        // Sprite functions
+        isPlayer()
+        { return true;  }
+
+        // Luigi y physics for gravity
+        update()
+        {
+            // console.log("Pre-update " + this.toString());
+            this.vert_velocity = this.vert_velocity + 10;
+
+            // velocity increase, within bounds..
+            if (this.vert_velocity > 90)
+                this.vert_velocity = 90;
+            if (this.vert_velocity < -90)
+                this.vert_velocity = -90;
+
+            this.y = this.y + this.vert_velocity;
+
+            // adjust to keep Mario from phasing into ground.
+            if ((this.y + this.h >= 400))
+            {
+                this.jump_count = 0;
+                this.vert_velocity = 0;
+                this.canJump = true;
+                this.y = 400 - this.h;
+            }
+
+            // console.log("Post-update " + this.toString());           // debug
+        }
+
+        // collision & gravity helper functions
+        correction(p)
+        {
+            // x collision from left
+            if ((this.x + this.w >= p.x) && (this.prev_x + this.w <= p.x))
+            {
+                View.scroll = View.prev_scroll;
+                this.x = this.prev_x;
+            }
+
+            // x collision from right
+            else if((this.x <= p.x + p.w) && (this.prev_x >= p.x + p.w))
+            {
+                View.scroll = View.prev_scroll;
+                this.x = this.prev_x;
+            }
+
+            // y collision from above
+            else
+            {    
+                this.jump_count = 0;
+                this.vert_velocity = 0;
+                this.canJump = true;
+                this.y = p.y - this.h;
+            }
+        }
+
+        toString()
+        {
+            return "Luigi (x,y) = (" + this.x + "," + this.y + "), vertical velocity = " + this.vert_velocity + ", currentFrame (w,h) = (" + this.w + "," + this.h + "), ";
+        }
+    }
+
+
+    class Goomba extends Sprite
+    {
+        animation;
+        currentFrame;
+
+        // physics and frame animation variables
+        isAlive;
+        deathFrameCount;
+        vert_velocity;
+        direction;
+        iterator;
+
+        constructor(x, y)
+        {
+            super(x, y)
+
+            this.animation = [];
+
+            for (var i = 0; i < 4; i++)
+            {
+                var image = new Image();
+                image.src = "G" + i + ".png";
+                this.animation.push(image);
+            }
+
+            this.currentFrame = new Image();
+            this.currentFrame = this.animation[0];
+
+            this.w = 37;
+            this.h = this.currentFrame.naturalHeight;
+
+            this.isAlive = true;
+            this.deathFrameCount = 0;
+            this.iterator = false;
+            this.vert_velocity = 0;
+            this.direction = false;
+        }
+
+
+        // alters which sprite to show based on a pattern and the passed in motion of luigi
+        // true = right facing      false = left facing
+        changeFrame(direction)
+        {
+            this.direction = direction;       // used by view to display sprite facing in the correct direction
+            
+            if (this.isAlive)
+            {
+                if (this.iterator == false)
+                    this.currentFrame = this.animation[0];
+                else
+                    this.currentFrame = this.animation[1];
+            }
+            else
+            {
+                if (this.iterator == false)
+                    this.currentFrame = this.animation[2];
+                else
+                    this.currentFrame = this.animation[3];
+            }
+
+            this.w = 37;
+            this.h = this.currentFrame.naturalHeight;
+            this.iterator = !this.iterator;
+        }
+        
+        update()
+        {
+
+            this.prev_x = this.x;
+            this.prev_y = this.y;
+            this.changeFrame(this.direction);
+
+            if (this.isAlive)
+            {
+                if (this.direction == false)
+                    this.x += 5;
+                else
+                    this.x -= 5;
+            }
+            else
+                this.deathFrameCount += 1;
+
+            this.vert_velocity += 10;
+
+            // velocity increase, within bounds..
+            if (this.vert_velocity > 90)
+                this.vert_velocity = 90;
+            if (this.vert_velocity < -90)
+                this.vert_velocity = -90;
+
+            this.y += this.vert_velocity;
+
+            // adjust to keep Goomba from phasing into ground.
+            if ((this.y + this.h >= 400))
+            {
+                this.vert_velocity = 0;
+                this.y = 400 - this.h;
+            }
+
+            //console.log(this.toString());            // Debug
+        }
+
+        correction(p)
+        {
+            // x collision from left
+            if ((this.x + this.w >= p.x) && (this.prev_x + this.w <= p.x))
+            {
+                this.x = p.x - this.w - 1;
+                this.direction = !this.direction;
+            }
+
+            // x collision from right
+            else if((this.x <= p.x + p.w) && (this.prev_x >= p.x + p.w))
+            {
+                this.x = p.x + p.w + 1;
+                this.direction = !this.direction;
+            }
+
+            // y collision from above
+            else if ((this.y + this.h >= p.y) && (this.prev_y + this.h <= p.y))
+            {
+                this.y = p.y - this.h;
+            }
+        }
+
+        isEnemy()   {   return true;    }
+
+        toString()
+        {
+            return "Goomba (x,y) = (" + this.x + "," + this.y + "), vertical velocity = " + this.vert_velocity + ", currentFrame (w,h) = (" + this.currentFrame.naturalWidth + "," + this.currentFrame.naturalHeight + "), ";
+        }
+    }
+
+
+    class Fireball extends Sprite
+    {
+        animation;
+        currentFrame;
+
+        // physics and frame animation variables
+        vert_velocity;
+        bounces;
+        direction;
+        iterator;
+        isAlive;
+        deathFrameCount;
+
+        constructor(x, y, d)
+        {
+            super(x, y);
+            this.direction = d;
+
+
+            this.animation = [];
+
+            for (var i = 0; i < 4; i++)
+            {
+                var img = new Image();
+                img.src = "f" + i + ".png";
+                this.animation.push(img);
+            }
+
+            this.currentFrame = new Image();
+            this.currentFrame = this.animation[0];
+
+            this.w = 20;
+            this.h = 20;
+            this.isAlive = true;
+            this.deathFrameCount = 0;
+            this.bounces = 0;
+            this.iterator = 0;
+            this.vert_velocity = 0;
+            
+        }
+
+
+
+        // alters which sprite to show based on a pattern and the passed in motion of luigi
+        // true = right facing      false = left facing
+        changeFrame(direction)
+        {
+            this.direction = direction;       // used by view to display sprite facing in the correct direction
+            
+            if (this.iterator >= this.animation.length)
+                this.iterator = 0;
+            this.currentFrame = this.animation[this.iterator];
+
+            this.iterator++;
+        }
+        
+        update()
+        {
+            this.prev_x = this.x;
+            this.prev_y = this.y;
+            this.changeFrame(this.direction);
+
+            if (this.direction == true)
+                this.x += 20;
+            else
+                this.x -= 20;
+
+
+            this.vert_velocity += 10;
+
+            // velocity increase, within bounds..
+            if (this.vert_velocity > 90)
+                this.vert_velocity = 90;
+            if (this.vert_velocity < -90)
+                this.vert_velocity = -90;
+
+            this.y += this.vert_velocity;
+
+            // adjust to keep Fireball from phasing into ground.
+            if ((this.y + this.h >= 400))
+            {
+                if (this.bounces <= 8)
+                {
+                    this.vert_velocity -= 11 * ( 8 - this.bounces);
+                    this.bounces++;
+                }
+                else
+                    this.vert_velocity = 0;
+                this.y = 400 - this.h;
+            }
+        }
+
+        isProjectile()   {   return true;    }
+
+        toString()
+        {
+            return "Fireball (x,y) = (" + this.x + "," + this.y + "), vertical velocity = " + this.vert_velocity + ", currentFrame (w,h) = (" + this.w + "," + this.h + "), ";
+        }
+    }
+
+
+
+    //
+    // View Class
+    class View
+    {
+        model;
+        static scroll;
+        static prev_scroll;
+        canvas;
+
+        // View Constructor
+        constructor(c, m)
+        {
+            c.view = this;
+            this.model = m;
+            View.scroll = 0;
+            View.prev_scroll = 0;
+            this.canvas = document.getElementById("myCanvas");
+        }
+
+        setModel(m)
+        {
+            this.model = m;
+        }
+
+        // Update the view in the game window via info from Model class
+        update()
+        {
+            let ctx = this.canvas.getContext("2d");
+            ctx.clearRect(0, 0, 1000, 500)
+            ctx.fillStyle = 'rgb(36, 141, 191)';					 	 // Blue Sky
+            ctx.fillRect(0, 0, 1000, 500);
+
+            for(var i = 0; i < this.model.sprites.length; i++)					// Sprites
+            {
+                let spr = this.model.sprites[i];
+
+                // this is where sprites are being drawn: this is failed attempt to flip the sprites based on their direction
+                // if (spr.direction == false)
+                // {
+                //     ctx.save();
+                //     ctx.translate(spr.x - View.scroll + spr.w, 0);
+                //     ctx.scale(-1, 1);
+                //     ctx.drawImage(spr.currentFrame, spr.x - View.scroll, spr.y);
+                //     ctx.restore();
+                // }
+                // else
+                //     ctx.drawImage(spr.currentFrame, spr.x - View.scroll, spr.y, null);
+                    
+                ctx.drawImage(spr.currentFrame, spr.x - View.scroll, spr.y);                   //this works with no scroll or sprite flip.
+
+            }
+            ctx.fillStyle = 'rgb(255, 159, 66)';					 // Ground plane
+            ctx.fillRect(0, 400, 1000, 500);
+
+        }
+    }
+
+
+
+    //
+    // Model Class
+    class Model
+    {
+        constructor()
+        {
+            // create luigi and add him to the sprite list so he is sprites[0]
+            this.sprites = [];
+            this.sprites.push(new Mario(100, 200));
+            this.luigi = this.sprites[0];
+
+            // create pipes and add them to the sprite list
+            this.sprites.push(new Pipe(-169, 117));
+            this.sprites.push(new Pipe(-36, 222));
+            this.sprites.push(new Pipe(-265, 222));
+            this.sprites.push(new Pipe(-88, 286));
+            this.sprites.push(new Pipe(-408, 281));
+            this.sprites.push(new Pipe(-1147, 100));
+            this.sprites.push(new Pipe(-1038, 100));
+            this.sprites.push(new Pipe(-1092, 100));
+            this.sprites.push(new Pipe(387, 275));
+            this.sprites.push(new Pipe(548, 187));
+            this.sprites.push(new Pipe(723, 102));
+            this.sprites.push(new Pipe(851, 272));
+            this.sprites.push(new Pipe(2153, 100));
+            this.sprites.push(new Pipe(712, 319));
+            this.sprites.push(new Pipe(-553, 141));
+            this.sprites.push(new Pipe(-573, 254));
+            this.sprites.push(new Pipe(986, 285));
+            this.sprites.push(new Pipe(1055, 358));
+            this.sprites.push(new Pipe(1161, 180));
+            this.sprites.push(new Pipe(1248, 251));
+            this.sprites.push(new Pipe(1487, 100));
+            this.sprites.push(new Pipe(1463, 275));
+            this.sprites.push(new Pipe(1825, 252));
+            this.sprites.push(new Pipe(1669, 161));
+
+            // create goombas and add them to the sprite list
+            this.sprites.push(new Goomba(-342, 363));
+            this.sprites.push(new Goomba(-786, 363));
+            this.sprites.push(new Goomba(214, 363));
+            this.sprites.push(new Goomba(475, 363));
+            this.sprites.push(new Goomba(-209, 363));
+            this.sprites.push(new Goomba(-447, 363));
+            this.sprites.push(new Goomba(-617, 363));
+            this.sprites.push(new Goomba(-832, 363));
+            this.sprites.push(new Goomba(90, 363));
+            this.sprites.push(new Goomba(609, 36));
+            this.sprites.push(new Goomba(808, 363));
+            this.sprites.push(new Goomba(948, 363));
+            this.sprites.push(new Goomba(1118, 363));
+            this.sprites.push(new Goomba(1324, 363));
+            this.sprites.push(new Goomba(1380, 363));
+            this.sprites.push(new Goomba(1750, 363));
+            this.sprites.push(new Goomba(1591, 363));
+            this.sprites.push(new Goomba(1543, 363));
+            this.sprites.push(new Goomba(1925, 363));
+            this.sprites.push(new Goomba(100, 363));
+            
+        }
+
+
+        //	Object Manipulation:
+        newProjectile()
+        {
+            let f = new Fireball(this.luigi.x, this.luigi.y, this.luigi.direction);
+            this.sprites.push(f);
+        }
+
+        killSprite(s)
+        {
+            if (this.sprites[s].isEnemy())
+            {
+                if (this.sprites[s].isAlive)
+                {
+                    this.sprites[s].isAlive = false;
+                }
+                this.sprites[s].deathFrameCount++;
+                this.sprites[s].changeFrame(false);
+                this.sprites[s].update();
+                if (this.sprites[s].deathFrameCount >= 75)
+                {
+                    this.sprites.splice(s, 1);
+                }
+            }
+            if (this.sprites[s].isProjectile())
+            {
+                if (this.sprites[s].isAlive)
+                {
+                    this.sprites[s].isAlive = false;
+                }
+
+                if ((this.sprites[s].x > View.scroll + 750) || (this.sprites[s].x < this.luigi.x - 750) || !this.sprites[s].isAlive) 
+                {
+                    this.sprites.splice(s, 1);
+                }
+            }
+
+        }
+
+
+        update()
+        {
+            // update all sprites ahead of checks so collision is accurate
+            for (var i = 0; i < this.sprites.length; i++)
+                this.sprites[i].update();						
+            
+            // reiterate through list to check vital collisions
+            for (var i = 0; i < this.sprites.length; i++)					
+            {
+                let a, b = null;					// initialize comparator sprites to null
+                let j = i + 1;
+
+                if (this.sprites[i].isEnemy())
+                {
+                    if (!(this.sprites[i].isAlive))
+                    {
+                        this.killSprite(i);
+                        if ( j >= this.sprites.length)			// fix the comparator loop counter if a sprite was deleted
+                            j = 0;
+                        if ( i >= this.sprites.length)
+                            i = 0;
+                    }
+                }
+                if (this.sprites[i].isProjectile())
+                {
+                    if (!(this.sprites[i].isAlive))
+                    {
+                        this.killSprite(i);
+                        if ( j >= this.sprites.length)			// fix the comparator loop counter if a sprite was deleted
+                            j = 0;
+                        if ( i >= this.sprites.length)
+                            i = 0;
+                    }
+                }
+
+                if ( j >= this.sprites.length)			// prepare the comparator loop counter in case of sprite comparison
+                    j = 0;
+
+                    
+                // if current a sprite is a player or enemy, check for collisions with other sprites
+                if (this.sprites[i].isPlayer() || this.sprites[i].isEnemy())
+                {
+                    a = this.sprites[i];
+
+                    // loop through sprites and restart at the beginning of the arraylist to catch them all
+                    while (j != i)
+                    {
+                        if (this.sprites[j].isPipe())
+                        {
+                            b = this.sprites[j];
+
+                            // handle player/enemy pipe collision
+                            if (this.collisionCheck(a, b))
+                            {
+                                a.correction(b);
+                                if (a.abovePipe(b))
+                                    a.update(b.y);
+                            }
+                        }
+
+                        // handle enemy / projectile collision
+                        if (this.sprites[j].isProjectile() && this.sprites[i].isEnemy())
+                        {
+                            let b = this.sprites[j];
+                            if (this.collisionCheck(a, b))
+                            {
+                                this.killSprite(i);
+                                this.killSprite(j);
+                            }
+                        }
+                        // handle luigi / enemy collision
+                        
+                        // increment j based on size of arraylist
+                        if (j + 1 >= this.sprites.length)
+                            j = 0;
+                        else
+                            j++;
+                    }
+                }
+            }
+        }
+
+        
+        collisionCheck(a, b)
+        {
+            if(a.x + a.w < b.x)		// luigi is left of object
+                return false;
+            if(a.x > b.x + b.w)		// luigi is right of object
+                return false;
+            if(a.y + a.h < b.y) 	// luigi is above object
+                return false;
+            if(a.y > b.y + b.h) 	// luigi is below object
+                return false;
+            return true;			// luigi is inside object: collision detected
+        }
+    }
+
+
+
+    //
+    // Controller
+    class Controller
+    {
+        constructor(model)
+        {
+            this.model = model;
+            this.view = this.model.view;
+            this.key_right = false;
+            this.key_left = false;
+            this.key_space = false;
+            this.key_ctrl = false;
+            this.key_q = false
+
+            let self = this;
+            document.addEventListener('keydown', function(event) { self.keyDown(event); }, false);
+            document.addEventListener('keyup', function(event) { self.keyUp(event); }, false);
+        }
+
+        keyDown(event)
+        {
+            if(event.keyCode == 39) this.key_right = true;
+            else if(event.keyCode == 37) this.key_left = true;
+            else if(event.keyCode == 32) this.key_space = true;         // remap to be space 32
+            else if(event.keyCode == 17) this.model.newProjectile();    // remap to be ctrl 17
+        }
+
+        keyUp(event)
+        {
+            if(event.keyCode == 39) this.key_right = false;
+            else if(event.keyCode == 37) this.key_left = false;
+            else if(event.keyCode == 32) this.key_space = false;        // remap to be space 32
+        }
+
+        update()
+        {
+            // set previous positions
+            this.model.luigi.prev_x = this.model.luigi.x;
+            this.model.luigi.prev_y = this.model.luigi.y;
+
+            View.prev_scroll = View.scroll;
+            
+            if(this.key_right) 
+            {	
+                View.scroll = View.scroll + 10;
+                this.model.luigi.changeFrame(true)
+                this.model.luigi.x += 10;
+            }
+            if(this.key_left)
+            {
+                View.scroll = View.scroll - 10;
+                this.model.luigi.changeFrame(false)
+                this.model.luigi.x -= 10;
+            }
+            if(this.key_space)                                         // remap space to jump
+            {
+                if ((this.model.luigi.jump_count <= 4) && this.model.luigi.canJump)
+				{
+					this.model.luigi.vert_velocity -= 18;
+					this.model.luigi.jump_count++;
+				}
+            }                                   
+
+            if(this.key_q)                                             // map q to quit
+            {
+
+            }
+            if (!this.key_left && !this.key_right && !this.key_space)
+			{
+				this.model.luigi.idle(this.prevDir);
+			}
+        }
+    }
+
+
+
+    //
+    // Game Class
+    class Game
+    {
+        // Member Variables
+        model;
+        controller;
+        view;
+
+        // Constructor for Game
+        //
+        constructor()
+        {
+            // Declare new objects for member variables
+            this.model = new Model();
+            this.controller = new Controller(this.model);
+            this.view = new View(this.controller, this.model);
+        }
+
+        // run script: loops until program is closed, runs update and repaint methods in
+        // View, Controller, Model.
+        run()
+        {
+            this.controller.update();
+            this.model = this.controller.model;			// Updates the model to be the one initialized by the controller if map.json was loaded
+            this.model.update();
+            this.view.update(); 					// Indirectly calls View.paintComponent
+
+        }
+    }
+
+
+
+    //
+    // main script
+    let game = new Game();
+    let timer = setInterval(function()  {   game.run(); }, 40);
+
+
+</script>
+</body>
